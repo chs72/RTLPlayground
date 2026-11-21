@@ -118,19 +118,35 @@ jobs:
           key: sdcc-${{ hashFiles('sdcc/*') }}
 
       - name: Build firmware
+        id: build
         run: |
           make MACHINE="${MACHINE}" CONFIG="${CONFIG_FILE}"
-          ls -lh "output/${MACHINE}/"*.bin
-          sha256sum "output/${MACHINE}/"*.bin > "output/${MACHINE}/SHA256SUMS.txt"
+          BIN_PATH=""
+          for f in "output/${MACHINE}/"*.bin; do
+            BIN_PATH="$f"
+            break
+          done
+          BIN_NAME=$(basename "${BIN_PATH}")
+          ls -lh "${BIN_PATH}"
+          sha256sum "${BIN_PATH}" > "output/${MACHINE}/SHA256SUMS.txt"
           cat "output/${MACHINE}/SHA256SUMS.txt"
+          echo "bin_path=${BIN_PATH}" >> "$GITHUB_OUTPUT"
+          echo "bin_name=${BIN_NAME}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload firmware artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload firmware binary
+        uses: actions/upload-artifact@v7
         with:
-          name: firmware-${{ env.MACHINE }}-${{ needs.sync.outputs.commit_short }}
-          path: |
-            output/${{ env.MACHINE }}/*.bin
-            output/${{ env.MACHINE }}/SHA256SUMS.txt
+          name: ${{ steps.build.outputs.bin_name }}
+          path: ${{ steps.build.outputs.bin_path }}
+          archive: false
+          retention-days: 30
+
+      - name: Upload SHA256SUMS
+        uses: actions/upload-artifact@v7
+        with:
+          name: SHA256SUMS-${{ env.MACHINE }}-${{ needs.sync.outputs.commit_short }}.txt
+          path: output/${{ env.MACHINE }}/SHA256SUMS.txt
+          archive: false
           retention-days: 30
 
       - name: Write build summary
