@@ -1,4 +1,7 @@
 hostname RY-4GT-2SX
+ip 192.168.1.250
+netmask 255.255.255.0
+gw 192.168.1.1
 ip dhcp
 passwd admin
 ntp server ntp.aliyun.com
