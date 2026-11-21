@@ -1,0 +1,142 @@
+name: Sync Upstream and Build Firmware
+
+on:
+  schedule:
+    # 每 6 小时自动检查一次上游更新 (UTC)
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      machine:
+        description: '目标机型 (Makefile MACHINE 参数)'
+        required: false
+        default: 'RUIYING_RY_4GT_2SX'
+        type: string
+      force_build:
+        description: '即使上游没有更新也强制编译'
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: sync-and-build-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: Sync upstream (logicog/RTLPlayground)
+    runs-on: ubuntu-latest
+    outputs:
+      updated: ${{ steps.sync.outputs.updated }}
+      commit_sha: ${{ steps.sync.outputs.commit_sha }}
+      commit_short: ${{ steps.sync.outputs.commit_short }}
+
+    steps:
+      - name: Checkout fork repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          # 如上游修改了 .github/workflows/ 下文件，需在仓库 Secrets 中配置带 repo + workflow 权限的 SYNC_PAT
+          token: ${{ secrets.SYNC_PAT || github.token }}
+
+      - name: Fetch and merge upstream/main
+        id: sync
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git remote add upstream https://github.com/logicog/RTLPlayground.git
+          git fetch upstream main
+
+          AHEAD=$(git rev-list --count HEAD..upstream/main)
+          echo "Upstream commits ahead: ${AHEAD}"
+
+          if [ "${AHEAD}" -gt 0 ]; then
+            git merge --no-edit upstream/main
+            git push origin HEAD:main
+            echo "updated=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "updated=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          SHA=$(git rev-parse HEAD)
+          SHORT=$(git rev-parse --short HEAD)
+          echo "commit_sha=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "commit_short=${SHORT}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build firmware (${{ inputs.machine || 'RUIYING_RY_4GT_2SX' }})
+    needs: sync
+    if: needs.sync.outputs.updated == 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_build)
+    runs-on: ubuntu-latest
+    container:
+      image: debian:trixie
+    env:
+      MACHINE: ${{ inputs.machine || 'RUIYING_RY_4GT_2SX' }}
+
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y \
+            make \
+            gcc \
+            g++ \
+            pkg-config \
+            bison \
+            flex \
+            libboost-dev \
+            patch \
+            bzip2 \
+            curl \
+            ca-certificates \
+            xxd \
+            python-is-python3 \
+            libjson-c-dev \
+            zlib1g-dev \
+            git
+
+      - name: Checkout synced commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.sync.outputs.commit_sha }}
+          fetch-depth: 0
+
+      - name: Cache patched SDCC toolchain
+        uses: actions/cache@v4
+        with:
+          path: toolchain
+          key: sdcc-${{ hashFiles('sdcc/*') }}
+
+      - name: Build firmware
+        run: |
+          make MACHINE="${MACHINE}"
+          ls -lh "output/${MACHINE}/"*.bin
+          sha256sum "output/${MACHINE}/"*.bin > "output/${MACHINE}/SHA256SUMS.txt"
+          cat "output/${MACHINE}/SHA256SUMS.txt"
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ env.MACHINE }}-${{ needs.sync.outputs.commit_short }}
+          path: |
+            output/${{ env.MACHINE }}/*.bin
+            output/${{ env.MACHINE }}/SHA256SUMS.txt
+          retention-days: 30
+
+      - name: Write build summary
+        run: |
+          {
+            echo "### 固件编译完成"
+            echo ""
+            echo "- **目标机型**: \`${MACHINE}\`"
+            echo "- **提交版本**: \`${{ needs.sync.outputs.commit_short }}\`"
+            echo "- **上游同步**: \`${{ needs.sync.outputs.updated }}\`"
+            echo ""
+            echo '```'
+            cat "output/${MACHINE}/SHA256SUMS.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
