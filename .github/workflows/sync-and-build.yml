@@ -11,6 +11,11 @@ on:
         required: false
         default: 'RUIYING_RY_4GT_2SX'
         type: string
+      config:
+        description: '默认启动配置文件 (Makefile CONFIG 参数)'
+        required: false
+        default: 'config-RY-4GT-2SX.txt'
+        type: string
       force_build:
         description: '即使上游没有更新也强制编译'
         required: false
@@ -76,6 +81,7 @@ jobs:
       image: debian:trixie
     env:
       MACHINE: ${{ inputs.machine || 'RUIYING_RY_4GT_2SX' }}
+      CONFIG_FILE: ${{ inputs.config || 'config-RY-4GT-2SX.txt' }}
 
     steps:
       - name: Install build dependencies
@@ -113,7 +119,7 @@ jobs:
 
       - name: Build firmware
         run: |
-          make MACHINE="${MACHINE}"
+          make MACHINE="${MACHINE}" CONFIG="${CONFIG_FILE}"
           ls -lh "output/${MACHINE}/"*.bin
           sha256sum "output/${MACHINE}/"*.bin > "output/${MACHINE}/SHA256SUMS.txt"
           cat "output/${MACHINE}/SHA256SUMS.txt"
@@ -133,6 +139,7 @@ jobs:
             echo "### 固件编译完成"
             echo ""
             echo "- **目标机型**: \`${MACHINE}\`"
+            echo "- **配置文件**: \`${CONFIG_FILE}\`"
             echo "- **提交版本**: \`${{ needs.sync.outputs.commit_short }}\`"
             echo "- **上游同步**: \`${{ needs.sync.outputs.updated }}\`"
             echo ""

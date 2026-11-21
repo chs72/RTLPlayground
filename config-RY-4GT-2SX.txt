@@ -1,0 +1,12 @@
+hostname RY-4GT-2SX
+ip dhcp
+passwd admin
+ntp server ntp.aliyun.com
+ntp interval 60
+ntp timezone +08:00
+ntp dst off
+ntp on
+eee off 1
+eee off 2
+eee off 3
+eee off 4
