@@ -121,7 +121,9 @@ jobs:
       - name: Build firmware
         id: build
         run: |
-          make MACHINE="${MACHINE}" CONFIG="${CONFIG_FILE}"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          BUILD_DATE=$(TZ=UTC-8 date +"%Y-%m-%d %H:%M:%S")
+          make MACHINE="${MACHINE}" CONFIG="${CONFIG_FILE}" BUILD_DATE="${BUILD_DATE}"
           BIN_PATH=""
           for f in "output/${MACHINE}/"*.bin; do
             BIN_PATH="$f"
