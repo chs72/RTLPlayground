@@ -40,7 +40,7 @@ jobs:
 
     steps:
       - name: Checkout fork repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: main
           fetch-depth: 0
@@ -100,13 +100,14 @@ jobs:
             curl \
             ca-certificates \
             xxd \
+            jq \
             python-is-python3 \
             libjson-c-dev \
             zlib1g-dev \
             git
 
       - name: Checkout synced commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.sync.outputs.commit_sha }}
           fetch-depth: 0
