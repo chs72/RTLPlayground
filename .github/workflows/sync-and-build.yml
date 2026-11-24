@@ -49,6 +49,8 @@ jobs:
 
       - name: Fetch and merge upstream/main
         id: sync
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_PAT || github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -60,8 +62,9 @@ jobs:
           echo "Upstream commits ahead: ${AHEAD}"
 
           if [ "${AHEAD}" -gt 0 ]; then
-            git merge --no-edit upstream/main
+            git merge --no-edit -m "Merge upstream/main [skip ci]" upstream/main
             git push origin HEAD:main
+            gh workflow disable build.yml || true
             echo "updated=true" >> "$GITHUB_OUTPUT"
           else
             echo "updated=false" >> "$GITHUB_OUTPUT"
