@@ -2644,20 +2644,21 @@ function Poller(fn, ms) {
 Poller.prototype.start = function() {
     if (this.on) return;
     this.on = true;
-    this.tick()
+    this.gen = (this.gen || 0) + 1;
+    this.tick(this.gen)
 };
 Poller.prototype.stop = function() {
     this.on = false;
     clearTimeout(this.t)
 };
-Poller.prototype.tick = function() {
+Poller.prototype.tick = function(gen) {
     var self = this;
-    if (!self.on) return;
+    if (!self.on || gen !== self.gen) return;
     var quiet = document.hidden || Date.now() - lastInput > IDLE_STOP_MS;
     var run = quiet ? Promise.resolve() : Promise.resolve().then(self.fn).catch(function() {});
     run.then(function() {
-        if (self.on) self.t = setTimeout(function() {
-            self.tick()
+        if (self.on && gen === self.gen) self.t = setTimeout(function() {
+            self.tick(gen)
         }, self.ms);
     });
 };
@@ -4699,6 +4700,10 @@ function scApply(n) {
             u = $("scu" + ty + n).value,
             v = inp.value.trim(),
             want = "off";
+        if (inp.validity.badInput) {
+            toast(t("sc_err"), "err");
+            return;
+        }
         if (v !== "" && v !== "0") {
             var x = Number(v);
             if (!Number.isInteger(x) || x < 1 || (u === "pps" && x > 1048575) || (u === "kbps" && x > 10000000)) {
@@ -5056,7 +5061,7 @@ var CONF_OVERWRITE = [
     /^port\s+\d{1,2}(?!\s+(name|lldp)\b)/, /^port\s+\d{1,2}\s+name\b/,
     /^mirror\b/,
     /^lag\s+\d\b/, /^laghash\s+\d\b/, /^isolate\s+\d{1,2}\b/,
-    /^stp\s+(prio|hello|maxage|fwd|txhold|version)\b/,
+    /^stp\s+(prio|hello|maxage|fwd|txhold|version|pathcost|bpdu)\b/,
     /^stp\s+(port\s+\d{1,2}|lag\s+[1-4])\s+(edge|cost|prio|guard|filter|p2p)\b/,
     /^igmp\b/, /^mtu\s+\d{1,2}\b/, /^storm\s+\d{1,2}\s+(bcast|mcast|ucast|umcast)\b/,
 ];
